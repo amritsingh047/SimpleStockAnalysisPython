@@ -1,0 +1,111 @@
+"Which ten countries have the highest total confirmed COVID-19 cases as of the latest date in the dataset?"
+# 1. Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Set visualization style
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (12, 6) # Default figure size
+
+# --- 2. Data Loading ---
+# NOTE: Replace 'covid_data.csv' with your actual file path or URL.
+# A common source for time-series data is the Johns Hopkins University (JHU) dataset.
+try:
+    data_url = 'https://raw.githubusercontent.com/datasets/covid-19/main/data/countries-aggregated.csv'
+    df = pd.read_csv(data_url)
+    print("Data successfully loaded!")
+except Exception as e:
+    print(f"Error loading data: {e}. Please ensure your file path or URL is correct.")
+    # Create a minimal dummy DataFrame for structural demonstration if loading fails
+    df = pd.DataFrame({
+        'Date': pd.to_datetime(['2020-03-01', '2020-03-02']),
+        'Country': ['US', 'US'],
+        'Confirmed': [100, 110],
+        'Recovered': [10, 12],
+        'Deaths': [1, 2]
+    })
+
+# Initial Data Exploration
+print("\n--- Initial Data Info ---")
+print(df.head())
+print(df.info())
+
+
+# --- 3. Data Cleaning and Preprocessing ---
+
+# 3.1. Convert 'Date' column to datetime objects
+df['Date'] = pd.to_datetime(df['Date'])
+
+# 3.2. Check and fill missing values (if any)
+# For JHU-style data, 'Recovered' often has NaNs, which we fill with 0 for cumulative analysis
+df[['Confirmed', 'Deaths', 'Recovered']] = df[['Confirmed', 'Deaths', 'Recovered']].fillna(0)
+
+
+# --- 4. Time-Series Analysis (Global/Aggregate) ---
+
+# Group data by date to get global cumulative counts
+daily_global = df.groupby('Date')[['Confirmed', 'Deaths', 'Recovered']].sum().reset_index()
+
+# 4.1. Calculate daily new cases (Infection rate)
+# We use .diff() to find the change from the previous day for the 'Confirmed' column.
+daily_global['New_Cases'] = daily_global['Confirmed'].diff().fillna(daily_global['Confirmed'])
+
+# 4.2. Calculate 7-Day Moving Average for smoothing the curve
+daily_global['7D_MA_Cases'] = daily_global['New_Cases'].rolling(window=7).mean()
+
+print("\n--- Global Daily Metrics (Head) ---")
+print(daily_global.tail())
+
+
+# --- 5. Geographical Analysis (Top Affected Countries) ---
+
+# Find the latest available date in the dataset
+latest_date = df['Date'].max()
+
+# Filter the data for the latest date and calculate total metrics
+latest_data = df[df['Date'] == latest_date]
+
+# 5.1. Top 10 Countries by Total Confirmed Cases
+top_confirmed = latest_data.sort_values(by='Confirmed', ascending=False).head(10)
+
+# 5.2. Top 10 Countries by Total Deaths
+top_deaths = latest_data.sort_values(by='Deaths', ascending=False).head(10)
+
+
+# --- 6. Data Visualization ---
+
+# 6.1. Time Series Plot: Daily New Cases vs. 7-Day Moving Average
+plt.figure(figsize=(14, 7))
+plt.plot(daily_global['Date'], daily_global['New_Cases'], label='Daily New Cases', alpha=0.5, color='orange')
+plt.plot(daily_global['Date'], daily_global['7D_MA_Cases'], label='7-Day Moving Average', color='red', linewidth=3)
+plt.title(f'Global Daily New COVID-19 Cases and 7-Day Moving Average (Up to {latest_date.strftime("%Y-%m-%d")})')
+plt.xlabel('Date')
+plt.ylabel('New Confirmed Cases')
+plt.legend()
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# 6.2. Bar Plot: Top 10 Countries by Confirmed Cases
+plt.figure(figsize=(14, 7))
+sns.barplot(x='Confirmed', y='Country', data=top_confirmed, palette='Reds_d')
+plt.title(f'Top 10 Countries by Total Confirmed Cases ({latest_date.strftime("%Y-%m-%d")})')
+plt.xlabel('Total Confirmed Cases (Millions)')
+plt.ylabel('Country')
+plt.xticks(rotation=0)
+plt.ticklabel_format(style='plain', axis='x')
+plt.tight_layout()
+plt.show()
+
+# 6.3. Bar Plot: Top 10 Countries by Deaths
+plt.figure(figsize=(14, 7))
+sns.barplot(x='Deaths', y='Country', data=top_deaths, palette='bone')
+plt.title(f'Top 10 Countries by Total Deaths ({latest_date.strftime("%Y-%m-%d")})')
+plt.xlabel('Total Deaths')
+plt.ylabel('Country')
+plt.xticks(rotation=0)
+plt.ticklabel_format(style='plain', axis='x')
+plt.tight_layout()
+plt.show()
